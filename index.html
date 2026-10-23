@@ -1,0 +1,1149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网络快递流水线 · TCP/IP四层互动体验</title>
+<style>
+  :root{
+    --canvas:#0F172A;
+    --surface:#1E293B;
+    --surface-2:#26364F;
+    --line:#334155;
+    --ink:#F1F5F9;
+    --ink-2:#94A3B8;
+    --c-app:#22D3EE;
+    --c-trans:#34D399;
+    --c-net:#A78BFA;
+    --c-link:#FB923C;
+    --ok:#34D399;
+    --bad:#F87171;
+    --radius:16px;
+    --radius-s:10px;
+    --font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{overflow-x:hidden}
+  body{
+    background:var(--canvas);
+    color:var(--ink);
+    font-family:var(--font);
+    font-size:16px;
+    line-height:1.6;
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  button{font-family:inherit;cursor:pointer}
+  button:focus-visible,[data-drag]:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--c-app);outline-offset:2px}
+
+  /* ---------- 顶部 ---------- */
+  header{
+    border-bottom:1px solid var(--line);
+    background:rgba(30,41,59,.85);
+    position:sticky;top:0;z-index:50;
+    backdrop-filter:blur(6px);
+  }
+  .head-inner{
+    max-width:1180px;margin:0 auto;
+    padding:14px clamp(16px,4vw,32px);
+    display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px}
+  .brand .dot{width:12px;height:12px;border-radius:50%;background:conic-gradient(var(--c-app),var(--c-trans),var(--c-net),var(--c-link),var(--c-app))}
+  .brand small{color:var(--ink-2);font-weight:500;font-size:13px}
+  .steps{display:flex;gap:8px;flex-wrap:wrap}
+  .step-pill{
+    display:flex;align-items:center;gap:6px;
+    padding:5px 12px;border-radius:999px;
+    border:1px solid var(--line);
+    color:var(--ink-2);font-size:13px;font-weight:600;
+    background:var(--surface);
+    transition:border-color .25s,color .25s;
+  }
+  .step-pill .n{
+    width:18px;height:18px;border-radius:50%;
+    display:grid;place-items:center;
+    font-size:11px;background:var(--surface-2);color:var(--ink-2);
+  }
+  .step-pill.done{color:var(--ink-2)}
+  .step-pill.done .n{background:var(--ok);color:#06281b}
+  .step-pill.now[data-l="1"]{border-color:var(--c-app);color:var(--c-app)}
+  .step-pill.now[data-l="2"]{border-color:var(--c-trans);color:var(--c-trans)}
+  .step-pill.now[data-l="3"]{border-color:var(--c-net);color:var(--c-net)}
+  .step-pill.now[data-l="4"]{border-color:var(--c-link);color:var(--c-link)}
+  .step-pill.now .n{background:currentColor}
+  .step-pill.now .n span{color:var(--canvas)}
+
+  /* ---------- 主舞台 ---------- */
+  main{max-width:1180px;margin:0 auto;padding:clamp(20px,4vw,40px) clamp(16px,4vw,32px) 64px}
+  body.js .stage{display:none}
+  body.js .stage.active{display:block}
+  .stage-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;align-items:start}
+  @media (max-width:900px){.stage-grid{grid-template-columns:1fr}}
+
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:clamp(18px,3vw,28px);
+  }
+
+  .kicker{font-size:13px;font-weight:700;letter-spacing:.08em;margin-bottom:6px}
+  .kicker.l1{color:var(--c-app)} .kicker.l2{color:var(--c-trans)}
+  .kicker.l3{color:var(--c-net)} .kicker.l4{color:var(--c-link)}
+  .kicker.l0{color:var(--ink-2)}
+  h1{font-size:clamp(26px,4.5vw,40px);line-height:1.25;margin-bottom:10px}
+  h2{font-size:clamp(21px,3.2vw,28px);line-height:1.3;margin-bottom:8px}
+  .lead{color:var(--ink-2);max-width:56ch}
+  .task-tip{
+    margin-top:16px;padding:12px 16px;border-radius:var(--radius-s);
+    background:var(--surface-2);border-left:4px solid var(--c-app);
+    font-size:15px;
+  }
+  .task-tip.green{border-left-color:var(--c-trans)}
+  .task-tip.purple{border-left-color:var(--c-net)}
+  .task-tip.orange{border-left-color:var(--c-link)}
+  .task-tip b{color:var(--ink)}
+
+  /* 知识卡 */
+  .kcard{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px;
+    position:sticky;top:86px;
+  }
+  @media (max-width:900px){.kcard{position:static}}
+  .kcard .who{font-size:14px;color:var(--ink-2);margin-bottom:4px}
+  .kcard .who b{font-size:18px}
+  .kcard h3{font-size:19px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .kcard h3 .swatch{width:14px;height:14px;border-radius:4px;flex:none}
+  .kcard p{color:var(--ink-2);font-size:15px;margin-bottom:10px}
+  .kcard .keys{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .kcard .keys span{
+    font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px;
+    background:var(--surface-2);border:1px solid var(--line);
+  }
+  .kcard .tipbox{
+    margin-top:14px;padding:10px 12px;border-radius:var(--radius-s);
+    background:rgba(34,211,238,.08);border:1px dashed var(--line);
+    font-size:14px;color:var(--ink-2);
+  }
+
+  /* ---------- 开场 ---------- */
+  .hero-flow{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0}
+  .hero-flow .hf{
+    flex:1 1 180px;min-width:160px;
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--radius);padding:16px;
+  }
+  .hf .ic{font-size:26px;margin-bottom:8px}
+  .hf b{display:block;margin-bottom:4px;font-size:16px}
+  .hf span{color:var(--ink-2);font-size:14px}
+  .hf.f1{border-top:3px solid var(--c-app)} .hf.f2{border-top:3px solid var(--c-trans)}
+  .hf.f3{border-top:3px solid var(--c-net)} .hf.f4{border-top:3px solid var(--c-link)}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:12px 26px;border-radius:999px;border:none;
+    background:var(--c-app);color:#06232b;
+    font-size:16px;font-weight:700;
+    transition:transform .15s ease,opacity .2s;
+  }
+  .btn:hover{transform:translateY(-2px)}
+  .btn:active{transform:translateY(0)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  .btn.green{background:var(--c-trans);color:#052e21}
+  .btn.purple{background:var(--c-net);color:#241443}
+  .btn.orange{background:var(--c-link);color:#3d1c05}
+  .btn.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
+  .btn-row{margin-top:20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+
+  /* ---------- 关1：选消息 ---------- */
+  .msg-choices{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-top:18px}
+  .msg-choice{
+    padding:16px 10px;border-radius:var(--radius-s);
+    background:var(--surface-2);border:2px solid var(--line);
+    color:var(--ink);font-size:19px;font-weight:700;letter-spacing:.1em;
+    transition:border-color .2s,transform .15s;
+  }
+  .msg-choice:hover{border-color:var(--c-app);transform:translateY(-2px)}
+  .msg-choice.sel{border-color:var(--c-app);background:rgba(34,211,238,.12)}
+  .custom-row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+  .custom-row input{
+    flex:1 1 200px;min-width:0;
+    background:var(--canvas);border:1px solid var(--line);
+    border-radius:var(--radius-s);padding:11px 14px;
+    color:var(--ink);font-size:16px;font-family:inherit;
+  }
+  .custom-row input:focus{outline:2px solid var(--c-app);border-color:transparent}
+  .err-msg{color:var(--bad);font-size:14px;margin-top:8px;min-height:1.4em}
+  .chosen-show{
+    margin-top:20px;padding:14px 18px;border-radius:var(--radius-s);
+    background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.35);
+    font-size:18px;
+  }
+  .chosen-show b{letter-spacing:.15em;font-size:22px}
+
+  /* ---------- 通用拖拽件 ---------- */
+  [data-drag]{cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}
+  [data-drag].dragging{cursor:grabbing;opacity:.95;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+  [data-drag].selected{outline:3px solid var(--c-app);outline-offset:2px}
+  [data-drop]{transition:background .2s,border-color .2s}
+  [data-drop].hover{background:rgba(34,211,238,.12);border-color:var(--c-app)!important}
+
+  /* ---------- 关2：编号封装 ---------- */
+  .scraps{display:flex;flex-wrap:wrap;gap:16px;margin-top:22px}
+  .scrap{
+    position:relative;
+    width:110px;min-height:130px;
+    background:#F8FAFC;color:#0F172A;
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:44px;font-weight:800;
+    box-shadow:0 3px 0 rgba(148,163,184,.4);
+    transition:box-shadow .25s;
+  }
+  .scrap.wrapped{
+    background:var(--surface-2);color:var(--ink);
+    border:2px solid var(--c-trans);
+    box-shadow:none;
+  }
+  .scrap .tag{
+    position:absolute;top:-12px;left:-12px;
+    width:34px;height:34px;border-radius:50%;
+    display:grid;place-items:center;
+    background:var(--c-trans);color:#052e21;
+    font-size:16px;font-weight:800;
+    border:3px solid var(--canvas);
+  }
+  .scrap .tcp{
+    position:absolute;bottom:6px;left:0;right:0;
+    text-align:center;font-size:11px;color:var(--c-trans);font-weight:700;
+    font-family:var(--mono);
+  }
+  .badges{display:flex;gap:12px;margin-top:26px;flex-wrap:wrap;align-items:center}
+  .badges .lbl{color:var(--ink-2);font-size:14px;width:100%}
+  .badge{
+    width:48px;height:48px;border-radius:50%;
+    background:var(--c-trans);color:#052e21;
+    font-size:21px;font-weight:800;
+    display:grid;place-items:center;
+    border:none;
+  }
+  .shake{animation:shake .35s ease}
+  @keyframes shake{
+    0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}
+  }
+
+  /* ---------- 关3：分拣 ---------- */
+  .sort-area{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;margin-top:20px}
+  .parcels{display:flex;flex-wrap:wrap;gap:14px;min-height:96px;padding:14px;background:var(--canvas);border-radius:var(--radius-s);border:1px dashed var(--line)}
+  .parcel{
+    width:132px;padding:10px 12px;border-radius:var(--radius-s);
+    background:linear-gradient(160deg,#B07B4F,#8A5A33);
+    color:#FFF7ED;font-size:13px;line-height:1.45;
+    border:2px solid #6B4423;
+  }
+  .parcel .pn{font-weight:800;font-size:15px;display:flex;justify-content:space-between}
+  .parcel .addr{font-family:var(--mono);font-size:12px;margin-top:4px;background:rgba(0,0,0,.25);border-radius:4px;padding:2px 6px;display:inline-block}
+  .exits{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .exit{
+    min-height:110px;padding:14px;border-radius:var(--radius-s);
+    background:var(--canvas);border:2px dashed var(--line);
+    display:flex;flex-direction:column;gap:6px;justify-content:center;align-items:center;
+    text-align:center;
+  }
+  .exit .ex-name{font-weight:800;font-size:15px}
+  .exit .ex-ip{font-family:var(--mono);font-size:14px;color:var(--c-net);font-weight:700}
+  .exit .ex-note{font-size:12px;color:var(--ink-2)}
+  .exit.ok-zone{border-style:solid}
+  .exit.good{border-color:var(--ok);border-style:solid;background:rgba(52,211,153,.08)}
+  .exit.flash{border-color:var(--bad)}
+  .sort-hint{font-size:14px;color:var(--ink-2);margin-top:10px;min-height:1.5em}
+  .sort-hint.bad{color:var(--bad)}
+  .sort-hint.good{color:var(--ok)}
+
+  /* ---------- 关4：传输 ---------- */
+  .road{
+    position:relative;margin-top:26px;
+    height:200px;border-radius:var(--radius);
+    background:var(--canvas);border:1px solid var(--line);
+    overflow:hidden;
+  }
+  .road .lane{
+    position:absolute;left:70px;right:70px;top:50%;
+    border-top:3px dashed var(--line);
+  }
+  .road .end{
+    position:absolute;top:50%;transform:translateY(-50%);
+    font-size:38px;
+  }
+  .road .end.left{left:16px}
+  .road .end.right{right:16px}
+  .road .end .cap{display:block;font-size:11px;color:var(--ink-2);text-align:center;margin-top:4px}
+  .fly{
+    position:absolute;left:64px;width:44px;height:34px;
+    border-radius:6px;
+    background:linear-gradient(160deg,#B07B4F,#8A5A33);
+    border:2px solid #6B4423;
+    display:grid;place-items:center;
+    color:#FFF7ED;font-weight:800;font-size:14px;
+    transition:transform 1.4s cubic-bezier(.3,.7,.4,1),opacity .5s;
+    will-change:transform;
+  }
+  .fly.lost{opacity:0;transform:scale(.4)!important}
+  .lost-alert{
+    margin-top:16px;padding:14px 18px;border-radius:var(--radius-s);
+    background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.5);
+    display:none;align-items:center;gap:12px;flex-wrap:wrap;
+  }
+  .lost-alert.show{display:flex}
+  .lost-alert b{color:var(--bad)}
+
+  /* ---------- 关5：拆包重组 ---------- */
+  .arrive{display:flex;flex-wrap:wrap;gap:14px;margin-top:20px}
+  .pkg{
+    width:120px;padding:12px;border-radius:var(--radius-s);
+    background:linear-gradient(160deg,#B07B4F,#8A5A33);
+    border:2px solid #6B4423;color:#FFF7ED;
+    font-size:14px;font-weight:700;text-align:center;
+    transition:transform .15s;
+  }
+  .pkg:hover{transform:translateY(-3px)}
+  .pkg small{display:block;font-weight:500;font-size:12px;opacity:.85;margin-top:2px}
+  .chars{display:flex;flex-wrap:wrap;gap:14px;margin-top:18px;min-height:96px}
+  .char-card{
+    width:84px;height:96px;border-radius:8px;
+    background:#F8FAFC;color:#0F172A;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    font-size:36px;font-weight:800;
+    box-shadow:0 3px 0 rgba(148,163,184,.4);
+  }
+  .char-card small{font-size:13px;color:#64748B;font-weight:700}
+  .slots{display:flex;flex-wrap:wrap;gap:14px;margin-top:18px}
+  .slot{
+    width:84px;height:96px;border-radius:8px;
+    border:2px dashed var(--line);
+    display:grid;place-items:center;
+    color:var(--ink-2);font-size:14px;font-weight:700;
+    background:var(--canvas);
+  }
+  .slot.filled{border:none;background:transparent}
+  .slot.filled .char-card{box-shadow:0 0 0 2px var(--ok)}
+  .final-msg{
+    margin-top:26px;padding:20px;border-radius:var(--radius);
+    background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.45);
+    text-align:center;display:none;
+  }
+  .final-msg.show{display:block}
+  .final-msg .fm{font-size:clamp(26px,4.5vw,38px);font-weight:800;letter-spacing:.2em;margin:8px 0}
+  .final-msg p{color:var(--ink-2)}
+
+  /* ---------- 总结 ---------- */
+  .sum-table{width:100%;border-collapse:collapse;margin-top:18px}
+  .sum-table th,.sum-table td{
+    padding:12px 14px;text-align:left;vertical-align:top;
+    border-bottom:1px solid var(--line);font-size:15px;
+  }
+  .sum-table th{color:var(--ink-2);font-size:13px;letter-spacing:.05em}
+  .sum-table .lay{font-weight:800;white-space:nowrap}
+  .sum-table .lay i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px}
+  .sum-scroll{overflow-x:auto}
+  .encap{
+    display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;align-items:stretch;
+  }
+  .enc{
+    flex:1 1 200px;min-width:170px;
+    border-radius:var(--radius-s);padding:12px 14px;font-size:14px;
+    background:var(--surface-2);border:1px solid var(--line);
+  }
+  .enc b{display:block;margin-bottom:2px}
+  .enc span{color:var(--ink-2);font-size:13px}
+  .enc.e1{border-left:4px solid var(--c-app)} .enc.e2{border-left:4px solid var(--c-trans)}
+  .enc.e3{border-left:4px solid var(--c-net)} .enc.e4{border-left:4px solid var(--c-link)}
+
+  .footer-note{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);color:var(--ink-2);font-size:13px;text-align:center}
+
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;animation:none!important}
+  }
+
+  @media print{
+    body{background:#fff;color:#000}
+    body.js .stage{display:block!important}
+    header{position:static;background:#fff}
+    .btn,[data-drag]{display:none}
+    .panel,.kcard,.hf{border-color:#999;background:#fff;color:#000}
+    .kcard p,.lead,.enc span,.sum-table th{color:#333}
+    .stage{page-break-inside:avoid;margin-bottom:24px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head-inner">
+    <div class="brand"><span class="dot" aria-hidden="true"></span>网络快递流水线 <small>TCP/IP 四层互动体验</small></div>
+    <nav class="steps" aria-label="四层进度">
+      <span class="step-pill" data-l="1" id="pill1"><span class="n"><span>1</span></span>应用层</span>
+      <span class="step-pill" data-l="2" id="pill2"><span class="n"><span>2</span></span>传输层</span>
+      <span class="step-pill" data-l="3" id="pill3"><span class="n"><span>3</span></span>网络层</span>
+      <span class="step-pill" data-l="4" id="pill4"><span class="n"><span>4</span></span>网络接口层</span>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ 第0关：开场 ============ -->
+  <section class="stage active" id="s0" aria-labelledby="t0">
+    <div class="panel">
+      <p class="kicker l0">互动体验课</p>
+      <h1 id="t0">把一条消息，亲手送过互联网</h1>
+      <p class="lead">一条消息想从你的电脑到达朋友的电脑，要经过一条"四层流水线"。接下来，你将<b>轮流扮演每一层的角色</b>——写信、打包、分拣、快递、签收，亲手把它送过去！</p>
+
+      <div class="hero-flow">
+        <div class="hf f1"><div class="ic" aria-hidden="true">✍️</div><b>① 应用层</b><span>你是写信人：产生要发送的消息</span></div>
+        <div class="hf f2"><div class="ic" aria-hidden="true">📦</div><b>② 传输层</b><span>你是打包员：拆开消息、编上号码、包严实</span></div>
+        <div class="hf f3"><div class="ic" aria-hidden="true">🔀</div><b>③ 网络层</b><span>你是分拣员：看地址，决定往哪送</span></div>
+        <div class="hf f4"><div class="ic" aria-hidden="true">🚚</div><b>④ 网络接口层</b><span>你是快递员：把包裹真正送过去</span></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="startBtn">开始体验 →</button>
+        <span style="color:var(--ink-2);font-size:14px">全程约5分钟 · 用到点击和拖动</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 第1关：应用层 ============ -->
+  <section class="stage" id="s1" aria-labelledby="t1">
+    <div class="stage-grid">
+      <div class="panel">
+        <p class="kicker l1">第1层 · 应用层</p>
+        <h2 id="t1">你是「写信人」：写一条要发送的消息</h2>
+        <p class="lead">你在微信里敲下一句话、点下"发送"——数据就从<b>应用层</b>诞生了。选一个短语，或者自己写一句（2~4个字）：</p>
+
+        <div class="msg-choices" id="msgChoices"></div>
+
+        <div class="custom-row">
+          <input id="customMsg" maxlength="4" placeholder="或自己输入2~4个字，如：我爱中国" aria-label="自定义消息">
+          <button class="btn ghost" id="useCustom">用这句</button>
+        </div>
+        <p class="err-msg" id="msgErr"></p>
+
+        <div class="chosen-show" id="chosenShow" hidden>
+          你的消息：<b id="chosenText"></b>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn" id="toS2" disabled>写好了，交给传输层 →</button>
+        </div>
+      </div>
+
+      <aside class="kcard">
+        <p class="who">你正在扮演 · <b style="color:var(--c-app)">应用层</b></p>
+        <h3><span class="swatch" style="background:var(--c-app)"></span>这一层干什么？</h3>
+        <p><b style="color:var(--ink)">产生要发送的数据。</b>你用的每一个APP——微信、浏览器、游戏——都工作在应用层。</p>
+        <p>你只负责"写内容"，至于怎么送、走哪条路，应用层一概不管，交给下一层。</p>
+        <div class="keys"><span>产生数据</span><span>微信 / 浏览器</span></div>
+        <div class="tipbox">💡 想一想：如果没有下层，你写的消息能自己"飞"到朋友手机上吗？</div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ 第2关：传输层 ============ -->
+  <section class="stage" id="s2" aria-labelledby="t2">
+    <div class="stage-grid">
+      <div class="panel">
+        <p class="kicker l2">第2层 · 传输层</p>
+        <h2 id="t2">你是「打包员」：拆成字条，编上序号</h2>
+        <p class="lead">消息太大，传输层会把它<b>拆成一个个"数据包"</b>，并给每个包<b>编上序号</b>——这样对方才能按顺序拼回去，少了也知道少哪个。</p>
+
+        <div class="task-tip green"><b>任务：</b>下面的字条被打乱了。把序号徽章<b>拖到</b>对应的字条上（也可以先点徽章、再点字条），按句子的正确顺序编号。编对后，字条就会"封装"成包裹。</div>
+
+        <div class="scraps" id="scraps"></div>
+
+        <div class="badges" id="badges">
+          <span class="lbl">序号徽章（拖到字条上）：</span>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn green" id="toS3" disabled>全部包好，送去分拣 →</button>
+        </div>
+      </div>
+
+      <aside class="kcard">
+        <p class="who">你正在扮演 · <b style="color:var(--c-trans)">传输层</b></p>
+        <h3><span class="swatch" style="background:var(--c-trans)"></span>这一层干什么？</h3>
+        <p><b style="color:var(--ink)">把数据分段、编号，保证送得全、送到对的应用。</b></p>
+        <p>大名鼎鼎的 <b style="color:var(--ink)">TCP</b> 就在这一层：它像<b style="color:var(--ink)">挂号信</b>——编号、签收、丢了补寄，可靠但麻烦些；它的兄弟 UDP 像平信，快但不保证送到。</p>
+        <div class="keys"><span>分段</span><span>编号</span><span>TCP</span><span>可靠性</span></div>
+        <div class="tipbox">💡 包裹上还要写"收：第X人"——一台电脑上微信和浏览器同时收数据，靠"端口"区分送给谁。</div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ 第3关：网络层 ============ -->
+  <section class="stage" id="s3" aria-labelledby="t3">
+    <div class="stage-grid">
+      <div class="panel">
+        <p class="kicker l3">第3层 · 网络层</p>
+        <h2 id="t3">你是「分拣员」：看清门牌号，放进正确出口</h2>
+        <p class="lead">每个包裹面单上都写了目的地的 <b>IP 地址</b>——那是设备在网络世界的"门牌号"。路由器（就是你）的工作：<b>只看地址，决定从哪个出口送出去</b>。</p>
+
+        <div class="task-tip purple"><b>任务：</b>把4个包裹<b>拖到</b>与 IP 地址匹配的分拣出口。提示：对比门牌号的<b>前两段数字</b>！</div>
+
+        <div class="sort-area">
+          <div>
+            <p style="font-size:14px;color:var(--ink-2);margin-bottom:6px">📥 待分拣的包裹：</p>
+            <div class="parcels" id="parcels"></div>
+          </div>
+          <div>
+            <p style="font-size:14px;color:var(--ink-2);margin-bottom:6px">🚪 分拣出口：</p>
+            <div class="exits" id="exits"></div>
+          </div>
+        </div>
+        <p class="sort-hint" id="sortHint"></p>
+
+        <div class="btn-row">
+          <button class="btn purple" id="toS4" disabled>分拣完毕，交给快递员 →</button>
+        </div>
+      </div>
+
+      <aside class="kcard">
+        <p class="who">你正在扮演 · <b style="color:var(--c-net)">网络层（路由器）</b></p>
+        <h3><span class="swatch" style="background:var(--c-net)"></span>这一层干什么？</h3>
+        <p><b style="color:var(--ink)">按 IP 地址寻找路线，决定数据往哪送。</b>干这活的设备就在你家里——路由器，名字就来自"选择路由"。</p>
+        <p>注意：路由器<b style="color:var(--ink)">只看面单、从不拆包裹</b>，它根本不知道、也不关心你写了什么。</p>
+        <div class="keys"><span>IP地址</span><span>路由选择</span><span>路由器</span></div>
+        <div class="tipbox">💡 IP 地址如 192.168.1.10，是每台联网设备的"门牌号"。</div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ 第4关：网络接口层 ============ -->
+  <section class="stage" id="s4" aria-labelledby="t4">
+    <div class="stage-grid">
+      <div class="panel">
+        <p class="kicker l4">第4层 · 网络接口层</p>
+        <h2 id="t4">你是「快递员」：把包裹真正送出去</h2>
+        <p class="lead">网络接口层负责"跑腿"：把数据变成电信号、WiFi信号、光信号，通过网线和光纤真正传过去。路上可能出意外——<b>丢包</b>！</p>
+
+        <div class="task-tip orange"><b>任务：</b>点击"出发"，让4个包裹上路。盯紧点——如果有包裹丢了，像 TCP 那样<b>要求重传</b>！</div>
+
+        <div class="road" id="road">
+          <div class="lane" aria-hidden="true"></div>
+          <div class="end left"><span aria-hidden="true">🔀</span><span class="cap">路由器</span></div>
+          <div class="end right"><span aria-hidden="true">💻</span><span class="cap">朋友的电脑</span></div>
+        </div>
+
+        <div class="lost-alert" id="lostAlert">
+          <span>⚠️ <b>3号包裹在路上丢了！</b>朋友的电脑只收到1、2、4号。</span>
+          <button class="btn orange" id="resendBtn">TCP：要求重传3号包</button>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn orange" id="sendFly">出发！</button>
+          <button class="btn green" id="toS5" disabled>全部送达，去收信 →</button>
+        </div>
+      </div>
+
+      <aside class="kcard">
+        <p class="who">你正在扮演 · <b style="color:var(--c-link)">网络接口层</b></p>
+        <h3><span class="swatch" style="background:var(--c-link)"></span>这一层干什么？</h3>
+        <p><b style="color:var(--ink)">把数据变成信号，真正传输出去。</b>WiFi、网线、光纤，都是这一层的"马路"。</p>
+        <p>信号会受干扰，<b style="color:var(--ink)">丢包</b>在所难免——别怕，传输层的 TCP 会发现"少了3号"，要求重发一份。这就是"可靠传输"。</p>
+        <div class="keys"><span>信号传输</span><span>WiFi / 网线 / 光纤</span><span>丢包与重传</span></div>
+        <div class="tipbox">💡 看视频偶尔卡顿，常常就是 UDP 丢了包、又懒得重传。</div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ 第5关：接收方 ============ -->
+  <section class="stage" id="s5" aria-labelledby="t5">
+    <div class="stage-grid">
+      <div class="panel">
+        <p class="kicker l0">终点 · 朋友的电脑</p>
+        <h2 id="t5">你是「收信人」：拆包，按序号拼回消息</h2>
+        <p class="lead">包裹全部到了，但<b>到达的顺序是乱的</b>！朋友的电脑要做两件事：逐层<b>拆包（解封）</b>，再<b>按序号把数据拼回原样</b>。</p>
+
+        <div class="task-tip"><b>第一步：</b>点击每个包裹，把它拆开。</div>
+        <div class="arrive" id="arrive"></div>
+
+        <div id="assembleZone" hidden>
+          <div class="task-tip green" style="margin-top:20px"><b>第二步：</b>把字条<b>拖到</b>下方对应序号的位置（也可以先点字条、再点位置），拼回完整的消息。</div>
+          <p style="font-size:14px;color:var(--ink-2);margin-top:16px">拆出的字条：</p>
+          <div class="chars" id="chars"></div>
+          <p style="font-size:14px;color:var(--ink-2);margin-top:14px">按序号拼回：</p>
+          <div class="slots" id="slots"></div>
+        </div>
+
+        <div class="final-msg" id="finalMsg">
+          <p style="font-size:15px">🎉 消息完整送达！朋友收到的是：</p>
+          <div class="fm" id="fmText"></div>
+          <p>拆包＝解封 ｜ 按序号拼回＝重组 —— 你的互联网之旅完成！</p>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn" id="toSum" disabled>查看旅程总结 →</button>
+        </div>
+      </div>
+
+      <aside class="kcard">
+        <p class="who">你正在扮演 · <b style="color:var(--ink)">接收方</b></p>
+        <h3><span class="swatch" style="background:linear-gradient(135deg,var(--c-app),var(--c-trans),var(--c-net),var(--c-link))"></span>接收方干什么？</h3>
+        <p><b style="color:var(--ink)">封装反过来，就是解封。</b>朋友的电脑从下往上，每层拆掉属于自己的"那张纸"。</p>
+        <p>传输层看到序号①②③④，就能把乱序到达的字条<b style="color:var(--ink)">拼回正确的顺序</b>——这就是"重组"。</p>
+        <div class="keys"><span>解封</span><span>按序号重组</span></div>
+        <div class="tipbox">💡 寄快递打包 vs 收快递拆包——你刚刚全体验了。</div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ 总结 ============ -->
+  <section class="stage" id="s6" aria-labelledby="t6">
+    <div class="panel">
+      <p class="kicker l0">旅程总结</p>
+      <h2 id="t6">一条消息的互联网之旅</h2>
+      <p class="lead">你刚才亲手做的每一步，就是 TCP/IP 四层每天为全世界几十亿台设备做的事：</p>
+
+      <div class="sum-scroll">
+        <table class="sum-table">
+          <caption style="text-align:left;color:var(--ink-2);font-size:13px;padding-bottom:8px">你的操作 × 四层职责对照</caption>
+          <thead>
+            <tr><th scope="col">层</th><th scope="col">你扮演的角色</th><th scope="col">你做的事</th><th scope="col">这一层的职责</th><th scope="col">关键词</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="lay"><i style="background:var(--c-app)"></i>应用层</td><td>写信人 ✍️</td><td>写下要发送的消息</td><td>产生数据（微信、浏览器等APP）</td><td>数据产生</td></tr>
+            <tr><td class="lay"><i style="background:var(--c-trans)"></i>传输层</td><td>打包员 📦</td><td>拆成字条、编上序号、包严实</td><td>分段、编号，保证送得全（TCP可靠 / UDP快速）</td><td>分段·编号·TCP</td></tr>
+            <tr><td class="lay"><i style="background:var(--c-net)"></i>网络层</td><td>分拣员 🔀</td><td>看IP门牌号，放进正确出口</td><td>按IP地址选择路线（路由器），只看地址不看内容</td><td>IP·路由选择</td></tr>
+            <tr><td class="lay"><i style="background:var(--c-link)"></i>网络接口层</td><td>快递员 🚚</td><td>送包裹上路，丢了重传</td><td>变成信号真正传输（WiFi/网线/光纤），可能丢包</td><td>信号·丢包重传</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top:28px;font-size:18px">发送时一层层"包"，接收时一层层"拆"</h3>
+      <div class="encap">
+        <div class="enc e1"><b>应用层</b><span>写下消息"我 爱 长 沙"</span></div>
+        <div class="enc e2"><b>传输层</b><span>＋序号①②③④（TCP头部）</span></div>
+        <div class="enc e3"><b>网络层</b><span>＋IP门牌号（IP头部）</span></div>
+        <div class="enc e4"><b>网络接口层</b><span>变成信号上路 → 对方反向一层层拆掉</span></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="againBtn">↻ 再玩一次</button>
+        <button class="btn ghost" id="topBtn">回顾四层知识</button>
+      </div>
+
+      <p class="footer-note">网络快递流水线 · TCP/IP 四层互动体验 —— 配合课堂"快递流水线"活动使用</p>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  'use strict';
+  try{
+
+    /* ================= 状态 ================= */
+    var message = '';            // 2~4字消息
+    var chars = [];              // 字符数组
+    var shuffledIdx = [];        // 打乱后的原始下标顺序
+    var wrappedCount = 0;        // 已编号封装数
+    var sortedCount = 0;         // 已正确分拣数
+    var arrived = [];            // 到达的包序号
+    var openedCount = 0;
+    var placedChars = 0;
+    var selected = null;         // 点击配对：当前选中的拖拽件
+    var pendingChars = [];       // 第5关待放入的字条
+    var cur = 0;                 // 当前关卡
+
+    var $ = function(id){ return document.getElementById(id); };
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    document.body.classList.add('js');
+
+    /* ================= 关卡切换 ================= */
+    function go(n){
+      cur = n;
+      var stages = document.querySelectorAll('.stage');
+      for(var i=0;i<stages.length;i++){ stages[i].classList.remove('active'); }
+      $('s'+n).classList.add('active');
+      // 顶部进度
+      var map = {1:1,2:2,3:3,4:4,5:4,6:4};
+      for(var l=1;l<=4;l++){
+        var p = $('pill'+l);
+        p.classList.remove('now'); 
+        if(n>=6 || l<map[n] || (n===5&&l<=4) || (n===6)){ p.classList.add('done'); }
+        if(map[n]===l && n<5){ p.classList.add('now'); }
+      }
+      window.scrollTo({top:0, behavior: reduceMotion ? 'auto' : 'smooth'});
+    }
+
+    $('startBtn').addEventListener('click', function(){ go(1); });
+    $('againBtn').addEventListener('click', function(){ location.reload(); });
+    $('topBtn').addEventListener('click', function(){ go(1); });
+
+    /* ================= 通用拖拽（Pointer Events + 点击配对） ================= */
+    var drag = null;
+
+    function clearSelected(){
+      if(selected){ selected.classList.remove('selected'); selected = null; }
+    }
+
+    function zoneUnder(x, y){
+      var el = document.elementFromPoint(x, y);
+      return el ? el.closest('[data-drop]') : null;
+    }
+
+    function markZoneHover(zone){
+      var zones = document.querySelectorAll('[data-drop].hover');
+      for(var i=0;i<zones.length;i++){ zones[i].classList.remove('hover'); }
+      if(zone){ zone.classList.add('hover'); }
+    }
+
+    document.addEventListener('pointerdown', function(e){
+      var t = e.target.closest ? e.target.closest('[data-drag]') : null;
+      if(!t || t.getAttribute('data-placed') === '1'){ return; }
+      e.preventDefault();
+      clearSelected();
+      var r = t.getBoundingClientRect();
+      t._home = t.parentElement;
+      t._next = t.nextSibling;
+      drag = {
+        el: t, dx: e.clientX - r.left, dy: e.clientY - r.top,
+        w: r.width, home: t.parentElement, next: t.nextSibling, moved:false
+      };
+      t.style.width = r.width + 'px';
+      t.style.position = 'fixed';
+      t.style.left = r.left + 'px';
+      t.style.top = r.top + 'px';
+      t.style.zIndex = '999';
+      t.classList.add('dragging');
+      document.body.appendChild(t);
+    });
+
+    document.addEventListener('pointermove', function(e){
+      if(!drag){ return; }
+      drag.moved = true;
+      drag.el.style.left = (e.clientX - drag.dx) + 'px';
+      drag.el.style.top = (e.clientY - drag.dy) + 'px';
+      drag.el.style.display = 'none';
+      var z = zoneUnder(e.clientX, e.clientY);
+      drag.el.style.display = '';
+      markZoneHover(z);
+    });
+
+    document.addEventListener('pointerup', function(e){
+      if(!drag){ return; }
+      var el = drag.el;
+      el.style.display = 'none';
+      var zone = drag.moved ? zoneUnder(e.clientX, e.clientY) : null;
+      el.style.display = '';
+      markZoneHover(null);
+      finishDrag(el, zone);
+      drag = null;
+    });
+
+    function finishDrag(el, zone){
+      el.classList.remove('dragging');
+      el.style.position = ''; el.style.left = ''; el.style.top = '';
+      el.style.width = ''; el.style.zIndex = '';
+      if(zone){
+        handleDrop(el, zone);   // 由各关注册的处理器判定
+      }else{
+        sendHome(el);
+      }
+    }
+
+    function sendHome(el){
+      if(el._home && el._home.isConnected){
+        if(el._next && el._next.isConnected && el._next.parentElement === el._home){
+          el._home.insertBefore(el, el._next);
+        }else{
+          el._home.appendChild(el);
+        }
+      }
+    }
+
+    // 点击配对：点拖拽件选中，再点放置区
+    document.addEventListener('click', function(e){
+      if(drag){ return; }
+      var t = e.target.closest ? e.target.closest('[data-drag]') : null;
+      var z = e.target.closest ? e.target.closest('[data-drop]') : null;
+      if(t && t.getAttribute('data-placed') !== '1'){
+        if(selected === t){ clearSelected(); return; }
+        clearSelected();
+        selected = t; t.classList.add('selected');
+        return;
+      }
+      if(z && selected){
+        var el = selected; clearSelected();
+        handleDrop(el, z);
+      }
+    });
+
+    /* ================= 第1关：应用层 ================= */
+    var presets = ['我爱长沙','好好学习','天天向上','网络世界','信息科技','少年中国'];
+    var box = $('msgChoices');
+    presets.forEach(function(m){
+      var b = document.createElement('button');
+      b.className = 'msg-choice'; b.type = 'button'; b.textContent = m;
+      b.addEventListener('click', function(){
+        var all = box.querySelectorAll('.msg-choice');
+        for(var i=0;i<all.length;i++){ all[i].classList.remove('sel'); }
+        b.classList.add('sel');
+        chooseMsg(m);
+      });
+      box.appendChild(b);
+    });
+
+    $('useCustom').addEventListener('click', function(){
+      var v = $('customMsg').value.replace(/\s+/g,'');
+      if(v.length < 2 || v.length > 4){
+        $('msgErr').textContent = '请输入 2~4 个字哦（现在输入了 ' + v.length + ' 个）';
+        return;
+      }
+      $('msgErr').textContent = '';
+      var all = box.querySelectorAll('.msg-choice');
+      for(var i=0;i<all.length;i++){ all[i].classList.remove('sel'); }
+      chooseMsg(v);
+    });
+
+    function chooseMsg(m){
+      message = m;
+      $('chosenText').textContent = m;
+      $('chosenShow').hidden = false;
+      $('toS2').disabled = false;
+    }
+
+    $('toS2').addEventListener('click', function(){
+      if(!message){ return; }
+      buildStage2();
+      go(2);
+    });
+
+    /* ================= 第2关：传输层（编号封装） ================= */
+    function shuffleKeepDiff(arr){
+      var idx = arr.slice();
+      do{
+        for(var i=idx.length-1;i>0;i--){
+          var j = Math.floor(Math.random()*(i+1));
+          var t = idx[i]; idx[i] = idx[j]; idx[j] = t;
+        }
+      }while(idx.every(function(v,i){ return v===i; }) && idx.length>1);
+      return idx;
+    }
+
+    function buildStage2(){
+      chars = message.split('');
+      shuffledIdx = shuffleKeepDiff(chars.map(function(_,i){ return i; }));
+      wrappedCount = 0;
+      var sc = $('scraps'); sc.innerHTML = '';
+      var bd = $('badges'); 
+      bd.querySelectorAll('.badge').forEach(function(b){ b.remove(); });
+
+      shuffledIdx.forEach(function(orig){
+        var s = document.createElement('div');
+        s.className = 'scrap';
+        s.setAttribute('data-drop','scrap');
+        s.setAttribute('data-orig', orig);
+        s.tabIndex = 0;
+        s.textContent = chars[orig];
+        sc.appendChild(s);
+      });
+
+      for(var n=0;n<chars.length;n++){
+        (function(n){
+          var b = document.createElement('button');
+          b.className = 'badge'; b.type = 'button';
+          b.setAttribute('data-drag','badge');
+          b.setAttribute('data-num', n);
+          b.textContent = (n+1);
+          bd.appendChild(b);
+        })(n);
+      }
+      $('toS3').disabled = true;
+    }
+
+    function handleDropBadge(badge, zone){
+      if(zone.getAttribute('data-drop') !== 'scrap'){ sendHome(badge); return; }
+      if(zone.querySelector('.tag')){ sendHome(badge); return; }   // 已编过
+      var num = parseInt(badge.getAttribute('data-num'),10);
+      var orig = parseInt(zone.getAttribute('data-orig'),10);
+      if(num === orig){
+        // 正确：徽章贴到字条，字条变包裹
+        badge.setAttribute('data-placed','1');
+        badge.style.position=''; badge.style.left=''; badge.style.top=''; badge.style.width=''; badge.style.zIndex='';
+        var tag = document.createElement('span');
+        tag.className = 'tag'; tag.textContent = (num+1);
+        zone.appendChild(tag);
+        var tcp = document.createElement('span');
+        tcp.className = 'tcp'; tcp.textContent = 'TCP头·序号'+(num+1);
+        zone.appendChild(tcp);
+        zone.classList.add('wrapped');
+        badge.style.display = 'none';
+        wrappedCount++;
+        if(wrappedCount === chars.length){ $('toS3').disabled = false; }
+      }else{
+        sendHome(badge);
+        zone.classList.remove('shake'); void zone.offsetWidth; zone.classList.add('shake');
+      }
+    }
+
+    $('toS3').addEventListener('click', function(){ buildStage3(); go(3); });
+
+    /* ================= 第3关：网络层（分拣） ================= */
+    var TARGET_IP = '192.168.1.10';
+    var exitsDef = [
+      {name:'出口 A', ip:'10.0.0.x', ok:false},
+      {name:'出口 B', ip:'192.168.1.x', ok:true},
+      {name:'出口 C', ip:'172.16.x.x', ok:false},
+      {name:'出口 D', ip:'192.168.0.x', ok:false}
+    ];
+
+    function buildStage3(){
+      sortedCount = 0;
+      var pc = $('parcels'); pc.innerHTML = '';
+      for(var i=0;i<chars.length;i++){
+        (function(i){
+          var p = document.createElement('div');
+          p.className = 'parcel';
+          p.setAttribute('data-drag','parcel');
+          p.setAttribute('data-num', i);
+          p.tabIndex = 0;
+          p.innerHTML = '<div class="pn"><span>📦 '+(i+1)+'号包裹</span><span>①②③④'.charAt(i)+'</span></div>' +
+                        '<div style="font-size:12px;opacity:.9">面单：发往</div>' +
+                        '<span class="addr">'+TARGET_IP+'</span>';
+          pc.appendChild(p);
+        })(i);
+      }
+      var ex = $('exits'); ex.innerHTML = '';
+      // 打乱出口顺序
+      var defs = exitsDef.slice();
+      for(var i=defs.length-1;i>0;i--){
+        var j = Math.floor(Math.random()*(i+1));
+        var t = defs[i]; defs[i] = defs[j]; defs[j] = t;
+      }
+      defs.forEach(function(d){
+        var z = document.createElement('div');
+        z.className = 'exit';
+        z.setAttribute('data-drop','exit');
+        z.setAttribute('data-ok', d.ok ? '1' : '0');
+        z.tabIndex = 0;
+        z.innerHTML = '<div class="ex-name">'+d.name+'</div><div class="ex-ip">'+d.ip+'</div><div class="ex-note">通往 '+d.ip.replace('x','…')+' 的网络</div>';
+        ex.appendChild(z);
+      });
+      $('sortHint').textContent = '';
+      $('sortHint').className = 'sort-hint';
+      $('toS4').disabled = true;
+    }
+
+    function handleDropParcel(parcel, zone){
+      if(zone.getAttribute('data-drop') !== 'exit'){ sendHome(parcel); return; }
+      if(zone.getAttribute('data-ok') === '1'){
+        parcel.setAttribute('data-placed','1');
+        parcel.style.position=''; parcel.style.left=''; parcel.style.top=''; parcel.style.width=''; parcel.style.zIndex='';
+        zone.appendChild(parcel);
+        parcel.style.width = '100%';
+        zone.classList.add('good');
+        sortedCount++;
+        var n = chars.length - sortedCount;
+        $('sortHint').className = 'sort-hint good';
+        $('sortHint').textContent = n>0 ? '✔ 对！门牌号前两段 192.168.1 完全匹配。还剩 '+n+' 个。' : '✔ 全部分拣正确！';
+        if(sortedCount === chars.length){ $('toS4').disabled = false; }
+      }else{
+        sendHome(parcel);
+        zone.classList.add('flash');
+        setTimeout(function(){ zone.classList.remove('flash'); }, 600);
+        $('sortHint').className = 'sort-hint bad';
+        $('sortHint').textContent = '✘ 这个出口通向 '+zone.querySelector('.ex-ip').textContent+'，和包裹的 192.168.1.10 对不上——再比比前两段数字！';
+      }
+    }
+
+    $('toS4').addEventListener('click', function(){ buildStage4(); go(4); });
+
+    /* ================= 第4关：网络接口层（传输+丢包） ================= */
+    var lostFixed = false;
+
+    function buildStage4(){
+      lostFixed = false;
+      arrived = [];
+      var road = $('road');
+      road.querySelectorAll('.fly').forEach(function(f){ f.remove(); });
+      for(var i=0;i<chars.length;i++){
+        (function(i){
+          var f = document.createElement('div');
+          f.className = 'fly';
+          f.id = 'fly'+i;
+          f.textContent = (i+1);
+          f.style.top = (28 + i*38) + 'px';
+          road.appendChild(f);
+        })(i);
+      }
+      $('lostAlert').classList.remove('show');
+      $('sendFly').disabled = false;
+      $('toS5').disabled = true;
+    }
+
+    $('sendFly').addEventListener('click', function(){
+      $('sendFly').disabled = true;
+      var road = $('road');
+      var dist = road.clientWidth - 64 - 44 - 70;  // 起止修正
+      if(dist < 60){ dist = 60; }
+      for(var i=0;i<chars.length;i++){
+        (function(i){
+          var f = $('fly'+i);
+          var delay = reduceMotion ? 0 : i*350;
+          setTimeout(function(){
+            var lostIdx = 2; // 3号包（下标2）
+            if(i === lostIdx){
+              f.style.transform = 'translateX(' + Math.floor(dist*0.62) + 'px)';
+              setTimeout(function(){
+                f.classList.add('lost');
+                $('lostAlert').classList.add('show');
+              }, reduceMotion ? 50 : 1500);
+            }else{
+              f.style.transform = 'translateX(' + dist + 'px)';
+              arrived.push(i);
+            }
+          }, delay);
+        })(i);
+      }
+    });
+
+    $('resendBtn').addEventListener('click', function(){
+      $('lostAlert').classList.remove('show');
+      var f = $('fly2');
+      f.classList.remove('lost');
+      var road = $('road');
+      var dist = road.clientWidth - 64 - 44 - 70;
+      if(dist < 60){ dist = 60; }
+      f.style.transition = 'none';
+      f.style.transform = 'translateX(0)';
+      void f.offsetWidth;
+      f.style.transition = '';
+      setTimeout(function(){
+        f.style.transform = 'translateX(' + dist + 'px)';
+        setTimeout(function(){
+          arrived.push(2);
+          lostFixed = true;
+          $('toS5').disabled = false;
+        }, reduceMotion ? 60 : 1450);
+      }, 60);
+    });
+
+    $('toS5').addEventListener('click', function(){ buildStage5(); go(5); });
+
+    /* ================= 第5关：接收方（拆包重组） ================= */
+    function buildStage5(){
+      openedCount = 0; placedChars = 0;
+      pendingChars = [];
+      var av = $('arrive'); av.innerHTML = '';
+      // 乱序到达
+      var order = shuffleKeepDiff(chars.map(function(_,i){ return i; }));
+      order.forEach(function(orig){
+        var p = document.createElement('button');
+        p.className = 'pkg'; p.type = 'button';
+        p.setAttribute('data-orig', orig);
+        p.innerHTML = '📦 包裹<small>点我拆包</small>';
+        p.addEventListener('click', function(){ openPkg(p, orig); });
+        av.appendChild(p);
+      });
+      $('assembleZone').hidden = true;
+      $('finalMsg').classList.remove('show');
+      $('toSum').disabled = true;
+    }
+
+    function openPkg(p, orig){
+      if(p.disabled){ return; }
+      p.disabled = true;
+      p.style.opacity = '.35';
+      p.innerHTML = '已拆开<small>字条掉进下方</small>';
+      var c = document.createElement('div');
+      c.className = 'char-card';
+      c.setAttribute('data-drag','char');
+      c.setAttribute('data-orig', orig);
+      c.tabIndex = 0;
+      c.innerHTML = chars[orig] + '<small>序号'+(orig+1)+'</small>';
+      // 等全部拆完才放入字条区
+      pendingChars.push(c);
+      openedCount++;
+      if(openedCount === chars.length){
+        var ch = $('chars'); ch.innerHTML = '';
+        // 乱序摆入字条
+        var pool = shuffleKeepDiff(pendingChars.map(function(_,i){ return i; }));
+        pool.forEach(function(i){ ch.appendChild(pendingChars[i]); });
+        // 槽位
+        var sl = $('slots'); sl.innerHTML = '';
+        for(var i=0;i<chars.length;i++){
+          (function(i){
+            var s = document.createElement('div');
+            s.className = 'slot';
+            s.setAttribute('data-drop','slot');
+            s.setAttribute('data-pos', i);
+            s.tabIndex = 0;
+            s.textContent = '位置 '+(i+1);
+            sl.appendChild(s);
+          })(i);
+        }
+        $('assembleZone').hidden = false;
+      }
+    }
+
+    function handleDropChar(card, zone){
+      if(zone.getAttribute('data-drop') !== 'slot'){ sendHome(card); return; }
+      if(zone.classList.contains('filled')){ sendHome(card); return; }
+      var pos = parseInt(zone.getAttribute('data-pos'),10);
+      var orig = parseInt(card.getAttribute('data-orig'),10);
+      if(pos === orig){
+        card.setAttribute('data-placed','1');
+        card.style.position=''; card.style.left=''; card.style.top=''; card.style.width=''; card.style.zIndex='';
+        zone.classList.add('filled');
+        zone.textContent = '';
+        zone.appendChild(card);
+        card.style.width = '100%';
+        placedChars++;
+        if(placedChars === chars.length){
+          $('fmText').textContent = message;
+          $('finalMsg').classList.add('show');
+          $('toSum').disabled = false;
+        }
+      }else{
+        sendHome(card);
+        zone.classList.remove('shake'); void zone.offsetWidth; zone.classList.add('shake');
+      }
+    }
+
+    // 键盘操作：Enter/空格 触发与点击相同的选中/放置逻辑
+    document.addEventListener('keydown', function(e){
+      if((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches &&
+         (e.target.matches('[data-drag]') || e.target.matches('[data-drop]'))){
+        e.preventDefault();
+        e.target.click();
+      }
+    });
+
+    /* ================= 放置分发 ================= */
+    function handleDrop(el, zone){
+      var kind = el.getAttribute('data-drag');
+      if(kind === 'badge'){ handleDropBadge(el, zone); return; }
+      if(kind === 'parcel'){ handleDropParcel(el, zone); return; }
+      if(kind === 'char'){ handleDropChar(el, zone); return; }
+      sendHome(el);
+    }
+
+    $('toSum').addEventListener('click', function(){ go(6); });
+
+  }catch(err){
+    // 脚本失败时，所有关卡按文档顺序静态可读
+    if(window.console && console.warn){ console.warn('交互初始化失败：', err); }
+  }
+})();
+</script>
+</body>
+</html>
